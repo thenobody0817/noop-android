@@ -1778,7 +1778,8 @@ internal fun anyBlockStagingSparse(blocks: List<SleepSession>): Boolean =
 
 /**
  * Pure #345 gate (unit-testable without a Composable) — whether the "May be incomplete" caveat applies.
- * Twin of Swift `SleepView.stageSparseNoteApplies`.
+ * Kotlin twin of Swift `SleepView.sparseStagingNote`, whose three-state answer this surface
+ * collapses to the one caveat it actually renders.
  *
  * [stagingSparse] alone is NOT the question the note asks. It is a STAGING-MECHANISM verdict:
  * [SleepStager.isGravitySparse] returns true when the gravity span is short against the HR span OR when the

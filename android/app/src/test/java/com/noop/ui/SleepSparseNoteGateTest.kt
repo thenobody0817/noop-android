@@ -9,7 +9,7 @@ import org.junit.Test
 
 /**
  * The #345 "May be incomplete" caveat, on the wearer's-own-typical rule. Kotlin twin of Swift
- * `SleepSparseNoteGateTests`.
+ * `SleepSparseStagingNoteTests`.
  *
  * WHY THE RULE CHANGED, which is the interesting part. The original compared a sparse night against a
  * fixed 8 hours, which says "eight hours is enough" equally to someone who sleeps six and to someone who
