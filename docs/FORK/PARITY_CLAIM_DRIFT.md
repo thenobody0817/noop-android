@@ -22,9 +22,21 @@ These are the blocking ones: a claim attached to a *declaration* that cannot be 
 | `WhoopStore.scorableWhoop5Channels` | `data/WhoopDao.kt:141` | Gone, same restructure. |
 
 So the R-R cluster is one change seen four times: upstream modelled "which channels are scorable, and
-from when", and the fork replaced that with a transport label per interval. Android still implements
-the old model and still *uses* `legacyUnscorableNight` in production (`ui/TodayScreen.kt:1200`), so
-this is real divergence, not a stale comment.
+from when", and the fork replaced that with a transport label per interval.
+
+**Correction, on a second pass: the fork dropped the per-night judgement rather than redesigning it.**
+The fork has no un-scorable concept anywhere — not in `Whoop5RR`, not in the stager, not in any
+screen. What replaced it is diagnostic: `rrTransportLine` reports when intervals started carrying a
+label, and `usesCanonicalSource` decides whether to trust a labelled observation. There is no
+equivalent per-night "this night produced no scorable beats" claim to port to.
+
+That matters because Android still *makes* that claim in production. `ui/TodayScreen.kt:1200` calls
+`legacyUnscorableNight` to decide whether an empty Charge is explained by the unit policy having no
+scorable beats for that night (upstream #1505). So this is not a stale comment over a dead path; it
+is a live feature that computes something the fork deliberately does not say. The two honest
+outcomes are to port #1505's Swift twin forward so both platforms claim the same thing, or to drop
+the Android feature to match the fork — and which one is right is a product decision about what the
+Today screen should tell someone, not a mechanical repair.
 
 ## The dead cross-references
 
@@ -47,13 +59,12 @@ They are not all the same, and that distinction is the point of writing this dow
 
 - **Features the fork dropped** (`SleepSparseNoteGate`, sparse-note staging): the Android twin should
   go with them. Keeping a gate that guards nothing is worse than no gate.
-- **Features the fork redesigned** (the whole R-R labelling cluster): the Android logic needs to be
-  reimplemented against the transport model, not deleted. `legacyUnscorableNight` is still called in
-  production and still decides what the Today screen claims about a night.
+- **Features the fork dropped, where Android still computes them** (the per-night R-R claim): a product
+  decision, because Android currently tells someone something the fork does not.
 - **Claims written against expressions** (`LocalDate.now().toEpochDay()`): a bug in the claim, not in
   either implementation. It should name a declaration.
 - **Missing twins** (`RrBatchTimestampsTest`): the Swift test exists and the Kotlin one is absent.
 
-Deciding these properly is per-symbol design work, not a mechanical repair, which is why this is a
-document rather than a patch. The honest sequencing is to take the redesign cluster first, since it
-is the only category where Android currently computes something the fork computes differently.
+Deciding these properly is per-symbol work, and only one of them is a judgement call rather than
+mechanical work. The mechanical ones can be cleared now; the R-R claim should not be, because either
+answer changes what the app says to a wearer.
