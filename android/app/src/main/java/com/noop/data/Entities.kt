@@ -174,6 +174,13 @@ data class RrInterval(
      *  The mark therefore says "excluded", never WHICH cause, so a diagnostic reading it must not claim
      *  one. Marked, never deleted; `WhoopDao.rrIntervals` filters it at READ. Twin of GRDB `tsSuspect`. */
     val tsSuspect: Int? = null,
+    /**
+     * Which delivery path a WHOOP's R-R interval arrived on, so a five-minute segment can pick the right
+     * channel rather than assuming one (recipe AI-12). The Forge fork added the column on GRDB; this
+     * migration adds it here. Nullable, no default: absent on rows the strap wrote before the path was
+     * recorded, which is exactly the "unknown delivery" case the resolver has to handle.
+     */
+    val transport: Int? = null,
 )
 
 /**
