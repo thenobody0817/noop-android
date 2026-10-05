@@ -895,6 +895,7 @@ fun SleepScreen(
                 napBlocks = night?.napBlocks ?: emptyList(),
                 habitualMidsleepSec = habitualMidsleep,
                 motionEpochs = night?.groupMotion ?: emptyList(),
+                typicalAsleepMin = remember(days) { typicalAsleepMin(days) },
                 groupStages = night?.groupStages,
                 groupInBedMin = night?.groupInBedMin,
                 windowOnsetTs = night?.heroOnsetTs,
@@ -1360,6 +1361,11 @@ private fun Hero(
     // Per-epoch MOTION for the main-night GROUP (#407), laid in group order by `selectNight`. Empty → honest
     // empty state. Drawn UNDER the hypnogram on the same timeline. Mirrors iOS SleepView.Night.motionEpochs.
     motionEpochs: List<Double> = emptyList(),
+    // The wearer's typical minutes asleep (mean over the last 30 scored nights, nil below five). The
+    // sparse-coverage caveat compares a night against THIS rather than a fixed 8h, because a flat
+    // threshold says "eight hours is enough" equally to a six-hour and a nine-hour sleeper. Passed in
+    // like every other input here — Hero holds no view model. Mirrors iOS SleepView.typicalAsleepMin.
+    typicalAsleepMin: Double? = null,
     // The bridged main-night GROUP's summed DECODED stage minutes (`sumGroupStages`, gaps excluded) —
     // the byte-for-byte twin of iOS `night.stages.total`, used for the Naps card's "Main sleep". Null
     // for single-block days → the session's own decoded stages below. NOT `display.stages`, whose awake
@@ -1545,7 +1551,12 @@ private fun Hero(
             // the stagingSparse flag alone fires on one long motion dropout at any night length. The rule
             // and its reasoning live in [stageSparseNoteApplies]. A nil flag (imported / pre-migration
             // block) is never itself a flag. Mirrors iOS SleepView.stageShowsIncompleteNote.
-            if (stageSparseNoteApplies(anyBlockStagingSparse(dayBlocks), s.asleep)) {
+            if (stageSparseNoteApplies(
+                anyBlockStagingSparse(dayBlocks),
+                s.asleep,
+                typicalAsleepMin,
+                partialTimelineShown = false,
+            )) {
                 SleepIncompleteNote()
             }
             // #1716 — a device-provided hypnogram assembled from records that never all arrived leaves a
@@ -1791,10 +1802,23 @@ internal fun anyBlockStagingSparse(blocks: List<SleepSession>): Boolean =
 internal fun stageSparseNoteApplies(
     stagingSparse: Boolean,
     asleepMin: Double,
-    needHours: Double = com.noop.analytics.RestScorer.defaultSleepNeedHours,
+    typicalAsleepMin: Double? = null,
+    partialTimelineShown: Boolean = false,
 ): Boolean {
     if (!stagingSparse) return false
-    return asleepMin < needHours * 60.0
+    if (partialTimelineShown) return false
+    return if (typicalAsleepMin != null) {
+        asleepMin < com.noop.ui.SleepSparseNoteGate.SPARSE_SHORT_FRACTION * typicalAsleepMin
+    } else {
+        asleepMin < com.noop.ui.SleepSparseNoteGate.SPARSE_SHORT_FLOOR_MIN
+    }
+}
+
+/** The wearer's typical minutes asleep, the mean over the last 30 scored nights; nil below five of them. */
+internal fun typicalAsleepMin(days: List<com.noop.data.DailyMetric>): Double? {
+    val values = days.asReversed().take(30).mapNotNull { it.totalSleepMin }.filter { it > 0 }
+    if (values.size < 5) return null
+    return values.sum() / values.size
 }
 
 /** The sparse-coverage caveat (#345): a night staged on thin motion data can under-detect and read short
