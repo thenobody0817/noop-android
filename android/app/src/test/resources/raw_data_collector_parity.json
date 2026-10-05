@@ -34,7 +34,7 @@
       "kotlin": ["fun setSessionRange(", "ground_truth_edit_start"]
     },
     "file_only_imu_storage": {
-      "swift": ["v41-drop-raw-imu-sample"],
+      "swift": ["v52-drop-raw-imu-sample"],
       "kotlin": ["MIGRATION_34_35", "DROP TABLE IF EXISTS `rawImuSample`"]
     },
     "session_bound_imu_file": {

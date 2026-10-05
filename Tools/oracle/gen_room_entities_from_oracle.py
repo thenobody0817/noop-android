@@ -178,7 +178,13 @@ def render(specs: dict) -> str:
     return "\n".join(out).rstrip() + "\n"
 
 
-SQL_TYPE = {"TEXT": "TEXT", "INTEGER": "INTEGER", "REAL": "REAL", "NUMERIC": "NUMERIC", "BLOB": "BLOB"}
+# The DDL must declare the type ROOM will check, which is the Kotlin type in the @Entity — not GRDB's
+# affinity. They differ for booleans: GRDB writes a Swift Bool as NUMERIC, the entity declares Kotlin
+# Boolean, and Room's own TableInfo expects INTEGER. Creating the column as NUMERIC leaves the migrated
+# table's declared type disagreeing with the entity, and WhoopDatabaseUpgradeTest then rejects the
+# migration ("Migration didn't properly handle") even though the values are identical. TEXT/INTEGER/REAL/
+# BLOB map through unchanged.
+SQL_TYPE = {"TEXT": "TEXT", "INTEGER": "INTEGER", "REAL": "REAL", "NUMERIC": "INTEGER", "BLOB": "BLOB"}
 
 
 def render_migration(specs: dict, from_version: int, to_version: int) -> str:
