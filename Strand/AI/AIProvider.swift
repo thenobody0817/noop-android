@@ -429,7 +429,7 @@ func performRequest(_ req: URLRequest, session: URLSession) async throws -> [Str
         }
 
         return obj
-    case 401, 403:
+    case let status where AICoachError.isKeyRejection(status):
         throw AICoachError.badKey
     case 429:
         throw AICoachError.rateLimited(retryAfter: retryAfterSeconds(http))

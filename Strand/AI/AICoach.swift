@@ -228,6 +228,15 @@ enum AIKeyStore {
 /// whether a countdown should restart, and the tests assert on the CASE rather than its rendered
 /// sentence — matching a localized string would pass in English and fail in German.
 enum AICoachError: LocalizedError, Equatable {
+    /// Whether an HTTP status means the stored key itself was turned away, as opposed to the provider
+    /// being busy, broken, or asked for something it does not have.
+    ///
+    /// Named rather than left as literals in four separate switches because it is the hinge the
+    /// key-repair affordance hangs on, and it decides what the wearer is told to go and do. Widen it
+    /// and a rate limit starts demanding a new key; narrow it and the trap this exists to remove comes
+    /// straight back. Byte-identical twin of the Kotlin `AiCoach.isKeyRejection`.
+    static func isKeyRejection(_ status: Int) -> Bool { status == 401 || status == 403 }
+
     case noKey
     case emptyQuestion
     case badKey
@@ -4768,7 +4777,8 @@ final class AICoachEngine: ObservableObject {
         return todayEpochDay > lastEpochDay
     }
 
-    /// Days since the epoch in the LOCAL calendar — the twin of Kotlin's `LocalDate.now().toEpochDay()`.
+    /// Days since the epoch in the LOCAL calendar — the twin of Kotlin's
+/// `CoachViewModel.localEpochDay(epochSeconds:zone:)`.
     ///
     /// Counted with calendar day arithmetic from `startOfDay`, not by dividing an interval by 86,400:
     /// a day is not always 86,400 seconds (DST), and the rule only needs a value that increments

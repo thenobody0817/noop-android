@@ -123,7 +123,7 @@ extension GeminiClient: ToolCallingClient, StreamingToolClient {
             var raw = ""
             for try await line in bytes.lines { raw += line }
             switch http.statusCode {
-            case 401, 403: throw AICoachError.badKey
+            case let status where AICoachError.isKeyRejection(status): throw AICoachError.badKey
             case 429: throw AICoachError.rateLimited(retryAfter: retryAfterSeconds(http))
             default: throw AICoachError.server(http.statusCode,
                                                providerErrorMessage(from: Data(raw.utf8)))

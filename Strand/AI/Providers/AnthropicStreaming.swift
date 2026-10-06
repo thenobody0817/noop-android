@@ -106,7 +106,7 @@ extension AnthropicClient: StreamingToolClient {
         guard let http = response as? HTTPURLResponse else { throw AICoachError.network("no HTTP response") }
         guard (200...299).contains(http.statusCode) else {
             switch http.statusCode {
-            case 401, 403: throw AICoachError.badKey
+            case let status where AICoachError.isKeyRejection(status): throw AICoachError.badKey
             case 429: throw AICoachError.rateLimited(retryAfter: retryAfterSeconds(http))
             default:
                 // `URLSession.bytes(for:)` gives us the response before its body.  Previously this
