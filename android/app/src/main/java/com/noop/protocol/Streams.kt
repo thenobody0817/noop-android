@@ -346,7 +346,11 @@ fun extractStreams(parsed: List<ParsedFrame>, deviceClockRef: Int, wallClockRef:
                     p.intArrayOrNull("rr_intervals")?.let { rrs ->
                         val source = RrSourceChannel.fromCode(p.intOrNull("rr_source_channel"))
                             ?: if (family == DeviceFamily.WHOOP4) RrSourceChannel.WHOOP4_REALTIME else null
-                        for (rr in rrs) out.rr.add(RrInterval(ts, rr, source))
+                        // #1118: the batch is spread across the time it describes — stamping every
+                        // interval at the frame put ~1.5s of beats on 1s of clock. See RrBatchTimestamps.
+                        for (placed in RrBatchTimestamps.spread(ts, rrs)) {
+                            out.rr.add(RrInterval(placed.ts, placed.rrMs, source))
+                        }
                     }
                 }
             }

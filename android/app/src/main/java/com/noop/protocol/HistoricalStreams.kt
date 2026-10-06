@@ -1009,9 +1009,14 @@ fun extractHistoricalStreams(
                 p.intOrNull("heart_rate")?.let { bpm -> if (bpm != 0) hr.add(HrRow(ts, bpm)) }
 
                 @Suppress("UNCHECKED_CAST")
-                (p["rr_intervals"] as? List<Int>)?.forEach { rrMs ->
-                    rr.add(RrRow(ts, rrMs, RrSourceChannel.fromCode(p.intOrNull("rr_source_channel"))
-                        ?: if (family == DeviceFamily.WHOOP4) RrSourceChannel.WHOOP4_HISTORICAL else null))
+                (p["rr_intervals"] as? List<Int>)?.let { rrs ->
+                    // #1118: the batch is spread across the time it describes — stamping every
+                    // interval at the frame put ~1.5s of beats on 1s of clock. See RrBatchTimestamps.
+                    val source = RrSourceChannel.fromCode(p.intOrNull("rr_source_channel"))
+                        ?: if (family == DeviceFamily.WHOOP4) RrSourceChannel.WHOOP4_HISTORICAL else null
+                    for (placed in RrBatchTimestamps.spread(ts.toInt(), rrs)) {
+                        rr.add(RrRow(placed.ts.toLong(), placed.rrMs, source))
+                    }
                 }
 
                 p.intOrNull("spo2_red")?.let { red ->
@@ -1148,8 +1153,11 @@ fun extractHistoricalStreams(
                 if (!plausible(ts.toLong())) { droppedImplausible++; continue }
                 parsed.parsed.intOrNull("heart_rate")?.let { bpm -> hr.add(HrRow(ts.toLong(), bpm)) }
                 @Suppress("UNCHECKED_CAST")
-                (parsed.parsed["rr_intervals"] as? List<Int>)?.forEach { rrMs ->
-                    rr.add(RrRow(ts.toLong(), rrMs))
+                (parsed.parsed["rr_intervals"] as? List<Int>)?.let { rrs ->
+                    // #1118: the batch is spread across the time it describes. See RrBatchTimestamps.
+                    for (placed in RrBatchTimestamps.spread(ts, rrs)) {
+                        rr.add(RrRow(placed.ts.toLong(), placed.rrMs))
+                    }
                 }
             }
 

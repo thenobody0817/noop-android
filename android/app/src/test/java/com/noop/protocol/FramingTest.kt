@@ -420,7 +420,12 @@ class FramingTest {
         assertEquals(1, streams.hr.size)
         assertEquals(HrSample(ts = 1700000000, bpm = 62), streams.hr[0])
         assertEquals(2, streams.rr.size)
-        assertEquals(RrInterval(ts = 1700000000, rrMs = 850), streams.rr[0])
+        // #1118: TWO intervals in one frame, so they are spread across the time they describe rather
+        // than both stamped at the frame. 850 ms rounds down to 0 s of following beat-time, so the older
+        // beat lands one second back and the most recent ends AT the frame. This assertion used to read
+        // 1700000000 for both — that was the bug, and it is what made rrCoverage read 1.5 on a genuine
+        // capture. A SINGLE-interval frame is unchanged, which Swift's own v24 case pins.
+        assertEquals(RrInterval(ts = 1699999999, rrMs = 850), streams.rr[0])
         assertEquals(RrInterval(ts = 1700000000, rrMs = 870), streams.rr[1])
         val whoop4 = extractStreams(listOf(parsed), deviceClockRef = 1700000000,
             wallClockRef = 1700000000, family = DeviceFamily.WHOOP4)
