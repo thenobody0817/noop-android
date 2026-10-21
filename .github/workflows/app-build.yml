@@ -39,14 +39,12 @@ on:
       - 'Packages/**'
       - 'project.yml'
       - '.github/workflows/app-build.yml'
-  # No push:main leg (2026-09-30), as upstream (#1028). The fork ran one from 2026-09-18 because it
-  # pushes straight to main and the 11.8.1 release shipped with StrandTests unrun, but every push then
-  # waited 30 to 50 minutes on a macOS runner for a build that had already been done locally. The gap
-  # that motivated it is closed at the release instead: `fork-release.yml` calls this workflow
-  # (`workflow_call` below) and publishes nothing unless it passes, so no release ships with the app
-  # targets uncompiled or StrandTests unrun. Between releases, a change to app-target Swift is built and
-  # its StrandTests run locally before the push, and `workflow_dispatch` stays for an on-demand run.
-  workflow_call:
+  # No `push: main` leg. Every change reaches main through a PR, which the trigger above already
+  # gates, so a push run rebuilt content that had just been built - on macOS runners, which GitHub
+  # bills at 10x Linux for a two-runner matrix (macos-15 for the universal macOS leg, macos-26 for
+  # the iOS 26 SDK). A RELEASE pushes straight to main with no PR, but fork-release.yml builds both
+  # Strand and NOOPiOS itself, so that path keeps its own compile gate. The gap this leaves is a
+  # direct non-release push to main; `workflow_dispatch` below covers checking one on demand.
   # `pr:` builds a PR's MERGE RESULT without pushing anything. Checking "does this PR compile once
   # merged?" used to mean creating a throwaway `ci/` branch holding main+PR and dispatching at it —
   # which left a "Compare & pull request" banner behind for every probe, because GitHub keys that
@@ -77,17 +75,13 @@ jobs:
           # #51: the macOS build must be universal — 'platform=macOS' on an Apple-Silicon runner thins to
           # arm64-only. Use the generic destination + explicit ARCHS so this CI verify catches an x86_64
           # break at PR time (matches the release/testing workflows).
-          # macos-26, not macos-15: macos-15's Xcode 16.4 (Swift 6.1.2) crashes swift-frontend compiling
-          # the Strand module — first in x86_64 module emission, then, with whole-module mode forced
-          # below, in SILGen (`emitRawApply`) on the arm64 slice. The macos-26 toolchain builds the same
-          # sources cleanly (its NOOPiOS leg compiles the shared Strand/ files).
           - scheme: Strand
             destination: 'generic/platform=macOS'
             extra_args: 'ARCHS="x86_64 arm64" ONLY_ACTIVE_ARCH=NO'
-            runner: macos-26
+            runner: macos-15
           # iOS needs the iOS 26 SDK (Liquid Glass's `glassEffect`, landed 2026-07-07) which macos-15's
           # default Xcode doesn't ship — matches the runner fork-testing-build.yml / fork-release.yml
-          # already use for their NOOPiOS legs.
+          # already use for their NOOPiOS legs. macos-15 stays correct for the macOS/Strand leg above.
           - scheme: NOOPiOS
             destination: 'generic/platform=iOS Simulator'
             extra_args: ''
@@ -127,45 +121,14 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
-      # NOOPiOS links Vendor/Nomic/llama.xcframework (the on-device semantic-memory runtime) and bundles
-      # the pinned Nomic embedding model — both fetched/verified by this script, never committed (it's a
-      # ~330 MiB binary pair). The Strand/macOS leg doesn't link it, so this only runs for NOOPiOS.
-      - name: Cache Nomic build inputs
-        if: matrix.scheme == 'NOOPiOS'
-        uses: actions/cache@v4
-        with:
-          path: Vendor/Nomic
-          key: nomic-${{ hashFiles('Tools/bootstrap-nomic.sh') }}
-
-      # MUST run BEFORE xcodegen: project.yml adds Vendor/Nomic/Resources as a `buildPhase: resources`
-      # directory, and XcodeGen enumerates that directory's CONTENTS at generation time. Bootstrap after
-      # generate and the only file there is .gitkeep — the model is silently left out of the project.
-      - name: Bootstrap Nomic embedding runtime + model
-        if: matrix.scheme == 'NOOPiOS'
-        run: Tools/bootstrap-nomic.sh
-
       - name: Generate Xcode project
         run: xcodegen generate
 
-      # SWIFT_COMPILATION_MODE=wholemodule overrides project.yml's incremental (singlefile) Debug default
-      # for THIS invocation only — a command-line xcodebuild override, not a project.yml change, so a
-      # developer's local Xcode build of the same Debug configuration is untouched.
-      #
-      # Why: the x86_64 leg of the Strand build (450+ files in one module) started crashing the Swift
-      # frontend during module emission — a `swift-frontend -emit-module
-      # -experimental-skip-non-inlinable-function-bodies-without-types` process aborting with a stack
-      # dump, no source-level diagnostic, reproduced on two independent commits. That flag is injected
-      # automatically by Xcode 16's incremental-mode "emit module separately" optimization, which has
-      # known crash reports on large single-invocation module-emit jobs. Whole-module mode uses a
-      # different code path that doesn't take that optimization, sidestepping the crash. CI always does a
-      # clean build from a fresh checkout, so incremental mode's speed benefit doesn't apply here anyway —
-      # this costs nothing in CI and changes nothing for local incremental Xcode builds.
       - name: Build ${{ matrix.scheme }}
         run: >-
           xcodebuild -scheme '${{ matrix.scheme }}' -configuration Debug
           -destination '${{ matrix.destination }}' ${{ matrix.extra_args }}
           CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
-          SWIFT_COMPILATION_MODE=wholemodule
           build
 
       # Run the app-target unit tests (StrandTests, wired into the Strand scheme's test action in
